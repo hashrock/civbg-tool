@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html>
+<head lang="en">
+    <meta charset="UTF-8">
+    <title>CivBG Tool</title>
+    <script src="http://cdn.mlkcca.com/v0.2.8/milkcocoa.js"></script>
+    <script src="bower_components/vue/dist/vue.js"></script>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="stylesheet" href="http://yui.yahooapis.com/pure/0.5.0/pure-min.css">
+    <style>
+        .content{
+            margin-left: auto;
+            margin-right: auto;
+            padding-left: 1em;
+            padding-right: 1em;
+            max-width: 768px;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="main" class="content">
+        <h3>{{turn.turn + 1}}ターン目 - {{nowPhase}}</h3>
+        <p>{{nowCountry}}　のターンです。</p>
+
+        <button class="pure-button pure-button-primary" v-on="click: addTurn">ターン進める</button>
+        <button class="pure-button" v-on="click: resetTurn">ターンリセット</button>
+
+        <h3>プレイヤー</h3>
+        <div v-repeat="player: players">
+            <div v-component="playerComponent" v-with="player: player, countries: countries"></div>
+        </div>
+    </div>
+
+    <script type="text/v-template" id="playerTemplate">
+        <select v-model="player.country" options="countries"></select>
+    </script>
+
+
+<script>
+    var milkcocoa = new MilkCocoa("https://io-ui67csxfu.mlkcca.com:443");
+    var globalDataStore = milkcocoa.dataStore("global");
+    var playersDataStore = milkcocoa.dataStore("players");
+
+    Vue.component("playerComponent", {
+        template: "#playerTemplate",
+        data:{
+            player:{
+            }
+        },
+        ready:function(){
+            this.$watch("player", function(data){
+                playersDataStore.set(data.id, {country: data.country});
+            },true, false);
+        }
+    });
+
+
+    var app = new Vue({
+        el : "#main",
+        data: {
+            players: [],
+            turn : {},
+            countries: [
+                    "なし",
+                    "アステカ",
+                    "アメリカ",
+                    "アラブ",
+                    "イギリス",
+                    "インド",
+                    "エジプト",
+                    "ギリシャ",
+                    "ズールー",
+                    "スペイン",
+                    "中国",
+                    "ドイツ",
+                    "日本",
+                    "フランス",
+                    "モンゴル",
+                    "ローマ",
+                    "ロシア"
+            ],
+            phaseLabel: [
+                    "ターン開始",
+                    "商業点",
+                    "都市運営",
+                    "移動",
+                    "研究"
+            ]
+        },
+        computed: {
+            "nowCountry": function(){
+                return this.players[this.turn.member].country;
+            },
+            "nowPhase": function(){
+                return this.phaseLabel[this.turn.phase]
+            }
+        },
+        methods: {
+            addTurn: function(){
+                if(this.players.filter(function(item){
+                        return item.country !== "なし"
+                    }).length === 0){
+                    alert("プレイ可能メンバーがいません。");
+                    return;
+                }
+
+                this.turn.member++;
+                if(this.turn.member > this.players.length - 1){
+                    this.turn.member = 0;
+                    this.turn.phase++;
+                }
+                if(this.turn.phase > this.phaseLabel.length - 1){
+                    this.turn.phase = 0;
+                    this.turn.turn++;
+                }
+
+                if(this.players[this.turn.member].country === "なし"){
+                    this.addTurn();
+                }
+
+                globalDataStore.set("turn", {
+                    turn: this.turn.turn,
+                    member: this.turn.member,
+                    phase: this.turn.phase
+                });
+            },
+            resetTurn: function(){
+                globalDataStore.set("turn", {
+                    turn: 0,
+                    member: 0,
+                    phase: 0
+                });
+            }
+        },
+        ready: function(){
+            var self = this;
+            globalDataStore.child('turn').get(function(turn){
+                if(turn === undefined){
+                    self.turn = {turn : 0, member: 0, phase: 0};
+                    globalDataStore.set("turn", {turn : 0, member: 0, phase:0});
+                }
+                self.turn = turn;
+            });
+
+            playersDataStore.query().done(function(data){
+                var initial = {country: "なし"};
+
+                if(data === undefined || data.length === 0){
+                    console.log("player Initialize");
+                    playersDataStore.push(initial);
+                    playersDataStore.push(initial);
+                    playersDataStore.push(initial);
+                    playersDataStore.push(initial);
+                    playersDataStore.push(initial);
+                }
+
+                playersDataStore.query().done(function(data2){
+                    self.players = data2;
+                });
+            });
+
+            globalDataStore.on('set', function(event) {
+                globalDataStore.child('turn').get(function(turn){
+                    self.turn = turn;
+                });
+            });
+
+            playersDataStore.on('set', function(event) {
+                self.players.filter(function(player){
+                    return player.id === event.id && player.country !== event.value.country
+                }).forEach(function(player){
+                    player.country = event.value.country;
+                });
+            });
+        }
+    });
+
+</script>
+</body>
+</html>
